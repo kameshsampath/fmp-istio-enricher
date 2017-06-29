@@ -1,0 +1,250 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>org.workspace7.fmp</groupId>
+  <artifactId>fmp-istio-enricher</artifactId>
+  <version>1.0-SNAPSHOT</version>
+
+  <name>Istio Enricher</name>
+  <description>The Enricher that wil be used with fabric8-maven-plugin to enrich resources with Istio objects
+  </description>
+
+  <url>https://github.com/kameshsampath/fmp-istio-enricher</url>
+
+  <issueManagement>
+    <system>GitHub</system>
+    <url>https://github.com/kameshsampath/fmp-istio-enricher/issues/</url>
+  </issueManagement>
+
+  <developers>
+    <developer>
+      <id>kameshsampath</id>
+      <name>Kamesh Sampath</name>
+      <email>kamesh.sampath@hotmail.com</email>
+      <roles>
+        <role>Plugin Developer</role>
+      </roles>
+      <timezone>+5:30</timezone>
+    </developer>
+  </developers>
+
+  <licenses>
+    <license>
+      <name>Apache License 2</name>
+      <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+
+  <scm>
+    <connection>scm:git:https://github.com/fabric8io/vertx-maven-plugin.git</connection>
+    <developerConnection>scm:git:ssh://git@/github.com/fabric8io/vertx-maven-plugin.git</developerConnection>
+    <url>https://github.com/fabric8io/vertx-maven-plugin</url>
+    <tag>HEAD</tag>
+  </scm>
+
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <maven.compiler.source>1.8</maven.compiler.source>
+    <maven.compiler.target>1.8</maven.compiler.target>
+    <fabric8-maven-enricher-api.version>3.4.2</fabric8-maven-enricher-api.version>
+    <asciidoctorj.version>1.5.4</asciidoctorj.version>
+    <asciidoctorj-pdf.version>1.5.0-alpha.11</asciidoctorj-pdf.version>
+
+    <skipTests>false</skipTests>
+
+
+    <asciidoctor-maven-plugin.version>1.5.3</asciidoctor-maven-plugin.version>
+    <maven-failsafe-plugin.version>2.19.1</maven-failsafe-plugin.version>
+    <maven-invoker-plugin.version>2.0.0</maven-invoker-plugin.version>
+
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>io.fabric8</groupId>
+      <artifactId>fabric8-maven-enricher-api</artifactId>
+      <version>${fabric8-maven-enricher-api.version}</version>
+    </dependency>
+
+
+    <dependency>
+      <groupId>io.fabric8</groupId>
+      <artifactId>fabric8-maven-enricher-standard</artifactId>
+      <version>${fabric8-maven-enricher-api.version}</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <version>4.12</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.jmockit</groupId>
+      <artifactId>jmockit</artifactId>
+      <version>1.24</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>com.jayway.jsonpath</groupId>
+      <artifactId>json-path-assert</artifactId>
+      <version>2.2.0</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.hamcrest</groupId>
+      <artifactId>hamcrest-all</artifactId>
+      <version>1.3</version>
+      <scope>test</scope>
+    </dependency>
+
+  </dependencies>
+
+  <build>
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <groupId>org.asciidoctor</groupId>
+          <artifactId>asciidoctor-maven-plugin</artifactId>
+          <version>${asciidoctor-maven-plugin.version}</version>
+          <dependencies>
+            <dependency>
+              <groupId>org.asciidoctor</groupId>
+              <artifactId>asciidoctorj</artifactId>
+              <version>${asciidoctorj.version}</version>
+            </dependency>
+          </dependencies>
+          <configuration>
+            <sourceDirectory>src/main/asciidoc</sourceDirectory>
+            <attributes>
+              <icons>font</icons>
+              <pagenums/>
+              <version>${project.version}</version>
+              <toc/>
+              <idprefix/>
+              <idseparator>-</idseparator>
+            </attributes>
+          </configuration>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+  </build>
+
+  <profiles>
+    <profile>
+      <id>run-its</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-invoker-plugin</artifactId>
+            <version>${maven-invoker-plugin.version}</version>
+            <configuration>
+              <cloneProjectsTo>${project.build.directory}/it</cloneProjectsTo>
+              <cloneClean>true</cloneClean>
+              <settingsFile>src/it/settings.xml</settingsFile>
+              <localRepositoryPath>${project.build.directory}/local-repo</localRepositoryPath>
+              <postBuildHookScript>verify</postBuildHookScript>
+              <addTestClassPath>true</addTestClassPath>
+              <skipInvocation>${skipTests}</skipInvocation>
+              <streamLogs>true</streamLogs>
+              <invokerPropertiesFile>invoker.properties</invokerPropertiesFile>
+            </configuration>
+            <executions>
+              <execution>
+                <id>integration-tests</id>
+                <goals>
+                  <goal>install</goal>
+                  <goal>run</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-failsafe-plugin</artifactId>
+            <version>${maven-failsafe-plugin.version}</version>
+            <executions>
+              <execution>
+                <goals>
+                  <goal>integration-test</goal>
+                  <goal>verify</goal>
+                </goals>
+              </execution>
+            </executions>
+            <configuration>
+              <systemPropertyVariables>
+                <maven.home>${maven.home}</maven.home>
+              </systemPropertyVariables>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <profile>
+      <id>install</id>
+      <properties>
+        <skipTests>false</skipTests>
+      </properties>
+      <build>
+        <defaultGoal>clean install</defaultGoal>
+      </build>
+    </profile>
+    <profile>
+      <id>doc-html</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.asciidoctor</groupId>
+            <artifactId>asciidoctor-maven-plugin</artifactId>
+            <version>${asciidoctor-maven-plugin.version}</version>
+            <configuration>
+              <backend>html</backend>
+              <sourceHighlighter>highlightjs</sourceHighlighter>
+              <attributes>
+                <toc>left</toc>
+              </attributes>
+            </configuration>
+          </plugin>
+        </plugins>
+        <defaultGoal>generate-resources asciidoctor:process-asciidoc</defaultGoal>
+      </build>
+    </profile>
+    <profile>
+      <id>doc-pdf</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.asciidoctor</groupId>
+            <artifactId>asciidoctor-maven-plugin</artifactId>
+            <version>${asciidoctor-maven-plugin.version}</version>
+            <configuration>
+              <backend>pdf</backend>
+              <sourceHighlighter>rouge</sourceHighlighter>
+            </configuration>
+            <dependencies>
+              <dependency>
+                <groupId>org.asciidoctor</groupId>
+                <artifactId>asciidoctorj-pdf</artifactId>
+                <version>${asciidoctorj-pdf.version}</version>
+              </dependency>
+            </dependencies>
+          </plugin>
+        </plugins>
+        <defaultGoal>generate-resources asciidoctor:process-asciidoc</defaultGoal>
+      </build>
+    </profile>
+
+  </profiles>
+
+</project>

@@ -1,0 +1,85 @@
+= fabric8 Maven Plugin Istio Enricher
+
+This fabric8 maven plugin enricher API allows enriching the kubernetes deployments with Istio Proxy and
+other needed annotations
+
+WARNING: This enricher is still under development, and expect changes
+
+== Build
+
+Clone the repo https://github.com/kameshsampath/fmp-istio-enricher and run `./mvnw clean install` from $PROJECT_HOME
+
+== Usage
+
+Create https://maven.fabric8.io/#profiles[fabric8 maven plugin profile] called *profiles.yml* inside `$basedir/src/main/fabric8`.
+
+The following example shows a profile which can be used in conjunction with spring-boot app. Please refer to https://maven.fabric8.io/#profiles[fabric8 maven plugin profile] for more details
+
+[source,yaml]
+----
+- name: istio-spring-boot-app
+  enricher:
+    # The order given in "includes" is the order in which enrichers are called
+    includes:
+    - fmp-name
+    - fmp-controller
+    - fmp-service
+    - fmp-image
+    - fmp-portname
+    - fmp-project
+    - fmp-pod-annotations
+    - fmp-debug
+    - fmp-merge
+    - fmp-remove-build-annotations
+    - fmp-volume-permission
+    - fmp-istio-enricher
+    - f8-expose
+    # Health checks
+    - spring-boot-health-check
+    - docker-health-check
+    - fmp-dependency
+    - f8-watch
+  generator:
+    # The order given in "includes" is the order in which generators are called
+    includes:
+    - spring-boot
+  watcher:
+    includes:
+    - spring-boot
+    - docker-image
+
+----
+
+Add the following fabric8-maven-plugin configuration to the project,
+
+[source,xml]
+----
+ <plugin>
+    <groupId>io.fabric8</groupId>
+    <artifactId>fabric8-maven-plugin</artifactId>
+    <version>3.4-SNAPSHOT</version>
+    <dependencies>
+      <dependency> <1>
+        <groupId>org.workspace7.fmp</groupId>
+        <artifactId>fmp-istio-enricher</artifactId>
+        <version>1.0-SNAPSHOT</version>
+      </dependency>
+    </dependencies>
+    <configuration>
+      <profile>istio-spring-boot-app</profile>  <2>
+      <enricher>
+        <config>
+          <spring-boot-health-check>
+            <probeMode>first</probeMode> <3>
+          </spring-boot-health-check>
+        </config>
+      </enricher>
+    </configuration>
+ </plugin>
+----
+<1> add the fmp-istio-enricher as dependnecy to the fabric8-maven-plugin
+<2> should be name that was used in the `profiles.yaml` above
+<3> the containers where to add the kubernetes probes like `liveliness` and `readiness, the valid values are
+    *first*, *last* or *all*
+
+NOTE: This application right now uses SNAPSHOT version of fabric8-maven-plugin for probeMode
