@@ -31,11 +31,7 @@ import static org.junit.Assert.assertThat;
 @RunWith(JMockit.class)
 public class InstioEnricherTest {
 
-    final String ISTIO_INIT_CONTAINERS = "[{\"args\":[\"-p\",\"15001\",\"-u\",\"1337\"],\"image\":\"docker.io/istio/init:0.1\",\"imagePullPolicy\":\"IfNotPresent\"," +
-        "\"name\":\"init\",\"securityContext\":{\"capabilities\":{\"add\":[\"NET_ADMIN\"]}}},{\"args\":[\"-c\",\"sysctl\n" +
-        "          -w kernel.core_pattern=/tmp/core.%e.%p.%t \\u0026\\u0026 ulimit -c unlimited\"],\"command\":[\"/bin/sh\"]," +
-        "\"image\":\"alpine\",\"imagePullPolicy\":\"IfNotPresent\",\"name\":\"enable-core-dump\",\"securityContext\":{\"privileged\":true}}]";
-
+    final String ISTIO_INIT_CONTAINERS = "[{\"args\":[\"-p\",\"15001\",\"-u\",\"1337\"],\"image\":\"docker.io/istio/init:0.1\",\"imagePullPolicy\":\"IfNotPresent\",\"name\":\"init\",\"securityContext\":{\"capabilities\":{\"add\":[\"NET_ADMIN\"]}}},{\"args\":[\"-c\",\"sysctl\",\"-w kernel.core_pattern=/tmp/core.%e.%p.%t \\\\u0026\\\\u0026 ulimit -c unlimited\\\\\",\"-1337\"],\"image\":\"alpine\",\"imagePullPolicy\":\"IfNotPresent\",\"name\":\"enable-core-dump\",\"securityContext\":{\"privileged\":true},\"command\":[\"/bin/sh\"]}]";
     @Mocked
     private EnricherContext context;
 
@@ -93,7 +89,6 @@ public class InstioEnricherTest {
 
         assertThat(json, JsonPathMatchers.hasJsonPath("$.spec.template.spec.containers[1].securityContext.runAsUser",
             Matchers.equalTo(1337)));
-
 
         assertThat(json, JsonPathMatchers.hasJsonPath("$.spec.template.spec.containers[1].args[0]",
             Matchers.equalTo("proxy")));
