@@ -31,7 +31,15 @@ import static org.junit.Assert.assertThat;
 @RunWith(JMockit.class)
 public class InstioEnricherTest {
 
-    final String ISTIO_INIT_CONTAINERS = "[{\"args\":[\"-p\",\"15001\",\"-u\",\"1337\"],\"image\":\"docker.io/istio/init:0.1\",\"imagePullPolicy\":\"IfNotPresent\",\"name\":\"init\",\"securityContext\":{\"capabilities\":{\"add\":[\"NET_ADMIN\"]}}},{\"args\":[\"-c\",\"sysctl\",\"-w kernel.core_pattern=/tmp/core.%e.%p.%t \\\\u0026\\\\u0026 ulimit -c unlimited\\\\\",\"-1337\"],\"image\":\"alpine\",\"imagePullPolicy\":\"IfNotPresent\",\"name\":\"enable-core-dump\",\"securityContext\":{\"privileged\":true},\"command\":[\"/bin/sh\"]}]";
+    final String ISTIO_INIT_CONTAINERS = "[{\"name\":\"init\",\"image\":\"docker.io/istio/init:0.1\"," +
+        "\"imagePullPolicy\":\"Always\",\"resources\":{},\"terminationMessagePath\":\"/dev/termination-log\"," +
+        "\"terminationMessagePolicy\":\"File\",\"args\":[\"-p\",\"15001\",\"-u\",\"1337\"]," +
+        "\"securityContext\":{\"capabilities\":{\"add\":[\"NET_ADMIN\"]}}},{\"name\":\"enable-core-dump\"," +
+        "\"image\":\"alpine\",\"imagePullPolicy\":\"Always\",\"command\":[\"/bin/sh\"],\"resources\":{}," +
+        "\"terminationMessagePath\":\"/dev/termination-log\",\"terminationMessagePolicy\":\"File\"," +
+        "\"args\":[\"-c\",\"sysctl  -w kernel.core_pattern=/tmp/core.%e.%p.%t && ulimit -c unlimited\"]," +
+        "\"securityContext\":{\"privileged\":true}}]";
+
     @Mocked
     private EnricherContext context;
 

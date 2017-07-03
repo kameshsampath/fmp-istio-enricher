@@ -71,6 +71,11 @@
       <version>${fabric8-maven-enricher-api.version}</version>
     </dependency>
 
+    <dependency>
+      <groupId>io.vertx</groupId>
+      <artifactId>vertx-core</artifactId>
+      <version>3.4.1</version>
+    </dependency>
 
     <dependency>
       <groupId>io.fabric8</groupId>

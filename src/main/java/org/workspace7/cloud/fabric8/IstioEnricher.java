@@ -2,25 +2,32 @@ package org.workspace7.cloud.fabric8;
 
 import io.fabric8.kubernetes.api.builder.TypedVisitor;
 import io.fabric8.kubernetes.api.model.*;
+import io.fabric8.kubernetes.api.model.extensions.DeploymentSpec;
 import io.fabric8.kubernetes.api.model.extensions.DeploymentSpecBuilder;
+import io.fabric8.maven.core.config.ResourceConfig;
+import io.fabric8.maven.core.handler.DeploymentHandler;
+import io.fabric8.maven.core.handler.HandlerHub;
 import io.fabric8.maven.core.util.Configs;
+import io.fabric8.maven.core.util.MavenUtil;
+import io.fabric8.maven.docker.config.ImageConfiguration;
 import io.fabric8.maven.enricher.api.BaseEnricher;
 import io.fabric8.maven.enricher.api.EnricherContext;
-import org.apache.commons.lang3.StringUtils;
-import org.json.JSONArray;
-import org.json.JSONObject;
+import io.vertx.core.json.JsonArray;
+import io.vertx.core.json.JsonObject;
 
-import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * This enricher takes care of adding <a href="https://isito.io">Istio</a> related enrichments to the Kubernetes Deployment
- *
+ * <p>
  * TODO: once f8-m-p model has initContainers model , then annotations can be moved to templateSpec
+ *
  * @author kameshs
  */
 public class IstioEnricher extends BaseEnricher {
+
+    private final DeploymentHandler deployHandler;
 
     // Available configuration keys
     private enum Config implements Configs.Key {
@@ -36,11 +43,14 @@ public class IstioEnricher extends BaseEnricher {
         initImage {{
             d = "docker.io/istio/init:0.1";
         }},
+        coreDumpImage {{
+            d = "alpine";
+        }},
         proxyArgs {{
             d = "proxy,sidecar,-v,2";
         }},
         imagePullPolicy {{
-            d = "IfNotPresent";
+            d = "Always";
         }};
 
         public String def() {
@@ -51,34 +61,48 @@ public class IstioEnricher extends BaseEnricher {
     }
 
     public IstioEnricher(EnricherContext buildContext) {
+
         super(buildContext, "fmp-istio-enricher");
+        HandlerHub handlerHub = new HandlerHub(buildContext.getProject());
+        deployHandler = handlerHub.getDeploymentHandler();
     }
 
     //TODO - need to check if istio proxy side car is already there
     //TODO - adding init-containers to template spec
+    //TODO - find out the other container  liveliness/readiness probes
     @Override
     public void addMissingResources(KubernetesListBuilder builder) {
+
         String[] proxyArgs = getConfig(Config.proxyArgs).split(",");
+        List<String> sidecarArgs = new ArrayList<>();
         for (int i = 0; i < proxyArgs.length; i++) {
-            proxyArgs[i] = StringUtils.trim(proxyArgs[i]);
+            sidecarArgs.add(proxyArgs[i]);
         }
+
         builder.accept(new TypedVisitor<DeploymentSpecBuilder>() {
             public void visit(DeploymentSpecBuilder deploymentSpecBuilder) {
                 if ("yes".equalsIgnoreCase(getConfig(Config.enabled))) {
                     log.info("Adding Istio proxy");
+                    String initContainerJson = buildInitContainers();
+                    sidecarArgs.add("--passthrough");
+                    sidecarArgs.add("8080");
+
                     deploymentSpecBuilder
                         .editOrNewTemplate()
                         .editOrNewMetadata()
                         .addToAnnotations("alpha.istio.io/sidecar", "injected")
                         .addToAnnotations("alpha.istio.io/version", "jenkins@ubuntu-16-04-build-12ac793f80be71-0.1.6-dab2033")
-                        .addToAnnotations("pod.beta.kubernetes.io/init-containers", buildInitContainers())
+                        .addToAnnotations("pod.alpha.kubernetes.io/init-containers", initContainerJson)
+                        .addToAnnotations("pod.beta.kubernetes.io/init-containers", initContainerJson)
                         .endMetadata()
                         .editOrNewSpec()
                         .addNewContainer()
                         .withName(getConfig(Config.proxyName))
+                        .withResources(new ResourceRequirements())
+                        .withTerminationMessagePath("/dev/termination-log")
                         .withImage(getConfig(Config.proxyImage))
                         .withImagePullPolicy(getConfig(Config.imagePullPolicy))
-                        .withArgs(proxyArgs)
+                        .withArgs(sidecarArgs)
                         .withEnv(proxyEnvVars())
                         .withSecurityContext(new SecurityContextBuilder()
                             .withRunAsUser(1337l)
@@ -120,70 +144,55 @@ public class IstioEnricher extends BaseEnricher {
     /**
      * Builds the isito init containers that needs to be added to Istio Deployments via annotation
      * &quot;pod.beta.kubernetes.io/init-containers&quot;
+     *
      * @return Json string that will set as value of the annotation
      */
     protected String buildInitContainers() {
-        JSONArray initContainers = new JSONArray();
 
-        //init container
-        //"'[{\"args\":[\"-p\",\"15001\",\"-u\",\"1337\"],\"image\":\"docker.io/istio/init:0.1\",\"imagePullPolicy\":\"IfNotPresent\"," +
-        //    ""name":"init","securityContext":{"capabilities":{"add":["NET_ADMIN"]}}}"
-        JSONObject container1 = new JSONObject();
+        JsonArray initContainers = new JsonArray();
 
-        JSONArray c1ArgsArray = new JSONArray();
-        c1ArgsArray.put("-p");
-        c1ArgsArray.put("15001");
-        c1ArgsArray.put("-u");
-        c1ArgsArray.put("1337");
-        container1.put("args", c1ArgsArray);
+        //Init container 1
+        JsonObject initContainer1 = new JsonObject()
+            .put("name", "init")
+            .put("image", getConfig(Config.initImage))
+            .put("imagePullPolicy", "Always")
+            .put("resources", new JsonObject())
+            .put("terminationMessagePath", "/dev/termination-log")
+            .put("terminationMessagePolicy", "File")
+            .put("args", new JsonArray()
+                .add("-p")
+                .add("15001")
+                .add("-u")
+                .add("1337"))
+            .put("securityContext",
+                new JsonObject()
+                    .put("capabilities",
+                        new JsonObject()
+                            .put("add", new JsonArray().add("NET_ADMIN"))));
 
-        container1.put("image", getConfig(Config.initImage));
-        container1.put("imagePullPolicy", getConfig(Config.imagePullPolicy));
-        container1.put("name", "init");
+        initContainers.add(initContainer1);
 
+        //Init container 2
+        JsonObject initContainer2 = new JsonObject()
+            .put("name", "enable-core-dump")
+            .put("image", getConfig(Config.coreDumpImage))
+            .put("imagePullPolicy", "Always")
+            .put("command", new JsonArray().add("/bin/sh"))
+            .put("resources", new JsonObject())
+            .put("terminationMessagePath", "/dev/termination-log")
+            .put("terminationMessagePolicy", "File")
+            .put("args", new JsonArray()
+                .add("-c")
+                .add("sysctl -w kernel.core_pattern=/tmp/core.%e.%p.%t \u0026\u0026 ulimit -c unlimited"))
+            .put("securityContext",
+                new JsonObject()
+                    .put("privileged", true));
 
-        JSONArray c1ScCapsArray = new JSONArray();
-        c1ScCapsArray.put("NET_ADMIN");
-        JSONObject c1ScCapsAdd = new JSONObject();
-        c1ScCapsAdd.put("add", c1ScCapsArray);
-        JSONObject scContext = new JSONObject();
-        scContext.put("capabilities", c1ScCapsAdd);
-        container1.put("securityContext", scContext);
-        initContainers.put(container1);
+        initContainers.add(initContainer2);
 
-        //enable-core-dump container
-        // "args":["-c","sysctl"," -w kernel.core_pattern=/tmp/core.%e.%p.%t \\u0026\\u0026 ulimit -c unlimited\"],\"command\":[\"/bin/sh\"]," +
-        // "\"image\":\"alpine\",\"imagePullPolicy\":\"IfNotPresent\",\"name\":\"enable-core-dump\",\"securityContext\":{\"privileged\":true}}]'"
-
-        JSONObject container2 = new JSONObject();
-
-        JSONArray c2ArgsArray = new JSONArray();
-        c2ArgsArray.put("-c");
-        c2ArgsArray.put("sysctl");
-        c2ArgsArray.put("-w kernel.core_pattern=/tmp/core.%e.%p.%t \\u0026\\u0026 ulimit -c unlimited\\");
-        c2ArgsArray.put("-1337");
-        container2.put("args", c2ArgsArray);
-
-        container2.put("image", "alpine");
-        container2.put("imagePullPolicy", getConfig(Config.imagePullPolicy));
-        container2.put("name", "enable-core-dump");
-
-
-        JSONArray cmdArray = new JSONArray();
-        cmdArray.put("/bin/sh");
-        container2.put("command", cmdArray);
-
-        JSONObject scContext2 = new JSONObject();
-        scContext2.put("privileged", true);
-        container2.put("securityContext", scContext2);
-
-        initContainers.put(container2);
-
-        StringWriter jsonWriter = new StringWriter();
-        initContainers.write(jsonWriter);
-        jsonWriter.flush();
-        String json = jsonWriter.toString();
-        log.debug("INIT CONTAINERS:{}", json);
+        String json = initContainers.encode();
+        log.debug("Adding Init Contianers {}", json);
         return json;
     }
+
 }
