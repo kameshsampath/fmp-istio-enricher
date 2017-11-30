@@ -1,0 +1,163 @@
+---
+apiVersion: apps.openshift.io/v1
+kind: DeploymentConfig
+metadata:
+  labels:
+    app: sb-helloworld
+    provider: fabric8
+    version: 0.0.1-SNAPSHOT
+    group: com.example
+  name: sb-helloworld
+spec:
+  replicas: 1
+  selector:
+    app: sb-helloworld
+    provider: fabric8
+    group: com.example
+  strategy:
+    rollingParams:
+      timeoutSeconds: 3600
+    type: Rolling
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/status: injected-version-releng@0d29a2c0d15f-0.2.12-998e0e00d375688bcb2af042fc81a60ce5264009
+      labels:
+        app: sb-helloworld
+        provider: fabric8
+        version: 0.0.1-SNAPSHOT
+        group: com.example
+    spec:
+      containers:
+      - env:
+        - name: KUBERNETES_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        image: sb-helloworld:latest
+        imagePullPolicy: IfNotPresent
+        name: spring-boot
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        - containerPort: 9779
+          name: prometheus
+          protocol: TCP
+        - containerPort: 8778
+          name: jolokia
+          protocol: TCP
+        securityContext:
+          privileged: false
+      - args:
+        - proxy
+        - sidecar
+        - -v
+        - "2"
+        - --configPath
+        - /etc/istio/proxy
+        - --binaryPath
+        - /usr/local/bin/envoy
+        - --serviceCluster
+        - sb-helloworld
+        - --drainDuration
+        - 45s
+        - --parentShutdownDuration
+        - 1m0s
+        - --discoveryAddress
+        - istio-pilot.istio-system:8080
+        - --discoveryRefreshDelay
+        - 1s
+        - --zipkinAddress
+        - zipkin.istio-system:9411
+        - --connectTimeout
+        - 10s
+        - --statsdUdpAddress
+        - istio-mixer.istio-system:9125
+        - --proxyAdminPort
+        - '"15000"'
+        - --passthrough
+        - "8080"
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        image: docker.io/istio/proxy_debug:0.2.12
+        imagePullPolicy: IfNotPresent
+        name: istio-proxy
+        resources: {}
+        securityContext:
+          privileged: true
+          readOnlyRootFilesystem: false
+          runAsUser: 1337
+        terminationMessagePath: /dev/termination-log
+        volumeMounts:
+        - mountPath: /etc/istio/proxy
+          name: istio-envoy
+        - mountPath: /etc/certs
+          name: istio-certs
+          readOnly: true
+      initContainers:
+      - args:
+        - -p
+        - "15001"
+        - -u
+        - "1337"
+        image: docker.io/istio/proxy_init:0.2.12
+        imagePullPolicy: IfNotPresent
+        name: istio-init
+        securityContext:
+          capabilities:
+            add:
+            - NET_ADMIN
+          privileged: true
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      - args:
+        - -c
+        - ' sysctl -w kernel.core_pattern=/etc/istio/proxy/core.%e.%p.%t && ulimit
+          -c unlimited'
+        command:
+        - /bin/sh
+        image: alpine
+        imagePullPolicy: IfNotPresent
+        name: enable-core-dump
+        securityContext:
+          privileged: true
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      volumes:
+      - emptyDir:
+          medium: Memory
+        name: istio-envoy
+      - name: istio-certs
+        secret:
+          defaultMode: 420
+          secretName: istio.default
+  triggers:
+  - type: ConfigChange
+  - imageChangeParams:
+      automatic: true
+      containerNames:
+      - istio-proxy
+      from:
+        kind: ImageStreamTag
+        name: proxy_debug:0.2.12
+    type: ImageChange
+  - imageChangeParams:
+      automatic: true
+      containerNames:
+      - spring-boot
+      from:
+        kind: ImageStreamTag
+        name: sb-helloworld:latest
+    type: ImageChange
