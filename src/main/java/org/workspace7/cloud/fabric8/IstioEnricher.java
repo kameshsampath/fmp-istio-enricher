@@ -12,6 +12,7 @@ import io.fabric8.maven.core.util.MavenUtil;
 import io.fabric8.maven.docker.config.ImageConfiguration;
 import io.fabric8.maven.enricher.api.BaseEnricher;
 import io.fabric8.maven.enricher.api.EnricherContext;
+import io.fabric8.openshift.api.model.DeploymentConfigSpecBuilder;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 
@@ -83,8 +84,8 @@ public class IstioEnricher extends BaseEnricher {
             sidecarArgs.add(proxyArgs[i]);
         }
 
-        builder.accept(new TypedVisitor<DeploymentSpecBuilder>() {
-            public void visit(DeploymentSpecBuilder deploymentSpecBuilder) {
+        builder.accept(new TypedVisitor<DeploymentConfigSpecBuilder>() {
+            public void visit(DeploymentConfigSpecBuilder deploymentConfigSpecBuilder) {
                 if ("yes".equalsIgnoreCase(getConfig(Config.enabled))) {
                     log.info("Adding Istio proxy");
                     String initContainerJson = buildInitContainers();
@@ -148,7 +149,7 @@ public class IstioEnricher extends BaseEnricher {
                     *   readOnly: true
                     */
 
-                    deploymentSpecBuilder
+                    deploymentConfigSpecBuilder
                         .editOrNewTemplate()
                         .editOrNewMetadata()
                         //.addToAnnotations("alpha.istio.io/sidecar", "injected")
