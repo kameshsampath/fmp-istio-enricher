@@ -329,19 +329,8 @@ public class IstioEnricher extends BaseEnricher {
     }
 
     /**
-     *
-     *
-     */
-    protected Map<String, String> istioSecretMap() {
-        Map<String, String> map = new HashMap<>();
-        map.put("defaultMode","420");
-        map.put("optional","true");
-        return map;
-    }
-
-    /**
-     *
-     *
+     *  Generate the volumes to be mounted
+     *  @return - list of {@link VolumeMount}
      */
     protected List<VolumeMount> istioVolumeMounts() {
         List<VolumeMount> volumeMounts = new ArrayList<>();
@@ -365,8 +354,8 @@ public class IstioEnricher extends BaseEnricher {
     }
 
     /**
-     *
-     *
+     *  Generate the volumes
+     *  @return - list of {@link Volume}
      */
     protected List<Volume> istioVolumes() {
         List<Volume> volumes = new ArrayList<>();
