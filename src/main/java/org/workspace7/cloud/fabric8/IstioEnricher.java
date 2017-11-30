@@ -72,6 +72,148 @@ public class IstioEnricher extends BaseEnricher {
         deployHandler = handlerHub.getDeploymentHandler();
     }
 
+    /*
+     * Result generated should be
+     *
+       apiVersion: v1
+       kind: DeploymentConfig
+       metadata:
+         annotations:
+           sidecar.istio.io/status: >-
+             injected-version-releng@0d29a2c0d15f-0.2.12-998e0e00d375688bcb2af042fc81a60ce5264009
+         name: helloworld
+       spec:
+         replicas: 0
+         template:
+           metadata:
+             annotations:
+               sidecar.istio.io/status: >-
+                 injected-version-releng@0d29a2c0d15f-0.2.12-998e0e00d375688bcb2af042fc81a60ce5264009
+             labels:
+               app: helloworld
+               version: v1
+           spec:
+             containers:
+               - image: istio/examples-helloworld-v1
+                 imagePullPolicy: IfNotPresent
+                 name: helloworld
+                 ports:
+                   - containerPort: 5000
+                     protocol: TCP
+                 resources:
+                   requests:
+                     cpu: 100m
+                 terminationMessagePath: /dev/termination-log
+                 terminationMessagePolicy: File
+               - args:
+                   - proxy
+                   - sidecar
+                   - '-v'
+                   - '2'
+                   - '--configPath'
+                   - /etc/istio/proxy
+                   - '--binaryPath'
+                   - /usr/local/bin/envoy
+                   - '--serviceCluster'
+                   - helloworld
+                   - '--drainDuration'
+                   - 45s
+                   - '--parentShutdownDuration'
+                   - 1m0s
+                   - '--discoveryAddress'
+                   - 'istio-pilot.istio-system:8080'
+                   - '--discoveryRefreshDelay'
+                   - 1s
+                   - '--zipkinAddress'
+                   - 'zipkin.istio-system:9411'
+                   - '--connectTimeout'
+                   - 10s
+                   - '--statsdUdpAddress'
+                   - 'istio-mixer.istio-system:9125'
+                   - '--proxyAdminPort'
+                   - '15000'
+                 env:
+                   - name: POD_NAME
+                     valueFrom:
+                       fieldRef:
+                         apiVersion: v1
+                         fieldPath: metadata.name
+                   - name: POD_NAMESPACE
+                     valueFrom:
+                       fieldRef:
+                         apiVersion: v1
+                         fieldPath: metadata.namespace
+                   - name: INSTANCE_IP
+                     valueFrom:
+                       fieldRef:
+                         apiVersion: v1
+                         fieldPath: status.podIP
+                 # Proxy - Container
+                 image: 'docker.io/istio/proxy_debug:0.2.12'
+                 imagePullPolicy: IfNotPresent
+                 name: istio-proxy
+                 resources: {}
+                 securityContext:
+                   privileged: true
+                   readOnlyRootFilesystem: false
+                   runAsUser: 1337
+                 terminationMessagePath: /dev/termination-log
+                 terminationMessagePolicy: File
+                 volumeMounts:
+                   - mountPath: /etc/istio/proxy
+                     name: istio-envoy
+                   - mountPath: /etc/certs/
+                     name: istio-certs
+                     readOnly: true
+             dnsPolicy: ClusterFirst
+             initContainers:
+               - args:
+                   - '-p'
+                   - '15001'
+                   - '-u'
+                   - '1337'
+                 image: 'docker.io/istio/proxy_init:0.2.12'
+                 imagePullPolicy: IfNotPresent
+                 name: istio-init
+                 resources: {}
+                 securityContext:
+                   capabilities:
+                     add:
+                       - NET_ADMIN
+                   privileged: true
+                 terminationMessagePath: /dev/termination-log
+                 terminationMessagePolicy: File
+               - args:
+                   - '-c'
+                   - >-
+                     sysctl -w kernel.core_pattern=/etc/istio/proxy/core.%e.%p.%t &&
+                     ulimit -c unlimited
+                 command:
+                   - /bin/sh
+                 image: alpine
+                 imagePullPolicy: IfNotPresent
+                 name: enable-core-dump
+                 resources: {}
+                 securityContext:
+                   privileged: true
+                 terminationMessagePath: /dev/termination-log
+                 terminationMessagePolicy: File
+             restartPolicy: Always
+             schedulerName: default-scheduler
+             securityContext: {}
+             terminationGracePeriodSeconds: 30
+             volumes:
+               - emptyDir:
+                   medium: Memory
+                   sizeLimit: '0'
+                 name: istio-envoy
+               - name: istio-certs
+                 secret:
+                   defaultMode: 420
+                   optional: true
+                   secretName: istio.default
+
+     */
     //TODO - need to check if istio proxy side car is already there
     //TODO - adding init-containers to template spec
     //TODO - find out the other container  liveliness/readiness probes
@@ -151,33 +293,35 @@ public class IstioEnricher extends BaseEnricher {
 
                     deploymentConfigSpecBuilder
                         .editOrNewTemplate()
-                        .editOrNewMetadata()
-                        //.addToAnnotations("alpha.istio.io/sidecar", "injected")
-                        //.addToAnnotations("alpha.istio.io/version", "jenkins@ubuntu-16-04-build-12ac793f80be71-0.1.6-dab2033")
-                        .addToAnnotations("sidecar.istio.io/status", "injected-version-releng@0d29a2c0d15f-0.2.12-998e0e00d375688bcb2af042fc81a60ce5264009")
-                        //.addToAnnotations("pod.alpha.kubernetes.io/init-containers", initContainerJson)
-                        //.addToAnnotations("pod.beta.kubernetes.io/init-containers", initContainerJson)
-                        .addToAnnotations("sidecar.istio.io/status",initContainerJson)
-                        .endMetadata()
-                        .editOrNewSpec()
-                        .addNewContainer()
-                        // See Proxy def
-                        .withName(getConfig(Config.proxyName))
-                        .withResources(new ResourceRequirements())
-                        .withTerminationMessagePath("/dev/termination-log")
-                        .withImage(getConfig(Config.proxyImage))
-                        .withImagePullPolicy(getConfig(Config.imagePullPolicy))
-                        .withArgs(sidecarArgs)
-                        .withEnv(proxyEnvVars())
-                        .withSecurityContext(new SecurityContextBuilder()
-                            .withRunAsUser(1337l)
-                            .withPrivileged(true)
-                            .withReadOnlyRootFilesystem(false)
-                            .build())
-                        .withVolumeMounts(istioVolumeMounts())
-                        .endContainer()
-                        .withVolumes(istioVolumes())
-                        .endSpec()
+                          // MetaData
+                          .editOrNewMetadata()
+                          //.addToAnnotations("alpha.istio.io/sidecar", "injected")
+                          //.addToAnnotations("alpha.istio.io/version", "jenkins@ubuntu-16-04-build-12ac793f80be71-0.1.6-dab2033")
+                          .addToAnnotations("sidecar.istio.io/status", "injected-version-releng@0d29a2c0d15f-0.2.12-998e0e00d375688bcb2af042fc81a60ce5264009")
+                          //.addToAnnotations("pod.alpha.kubernetes.io/init-containers", initContainerJson)
+                          //.addToAnnotations("pod.beta.kubernetes.io/init-containers", initContainerJson)
+                          .addToAnnotations("sidecar.istio.io/status",initContainerJson)
+                          .endMetadata()
+                          // Spec part of the DeploymentConfig
+                          .editOrNewSpec()
+                          .addNewContainer()
+                          // See Proxy def
+                          .withName(getConfig(Config.proxyName))
+                          .withResources(new ResourceRequirements())
+                          .withTerminationMessagePath("/dev/termination-log")
+                          .withImage(getConfig(Config.proxyImage))
+                          .withImagePullPolicy(getConfig(Config.imagePullPolicy))
+                          .withArgs(sidecarArgs)
+                          .withEnv(proxyEnvVars())
+                          .withSecurityContext(new SecurityContextBuilder()
+                              .withRunAsUser(1337l)
+                              .withPrivileged(true)
+                              .withReadOnlyRootFilesystem(false)
+                              .build())
+                          .withVolumeMounts(istioVolumeMounts())
+                          .endContainer()
+                          .withVolumes(istioVolumes())
+                          .endSpec()
                         .endTemplate();
                 }
             }
